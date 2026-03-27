@@ -13,11 +13,20 @@ import {
   Laptop,
   Watch,
   Camera,
-  Flame
+  Flame,
+  User,
+  LogOut,
+  Gift,
+  RefreshCw,
+  MessageCircle
 } from 'lucide-react';
+import { auth, db, signIn, signOut, signInWithWeChatToken } from '../firebase';
+import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
 
 interface HomeProps {
   onSelectModel: (model: string) => void;
+  showProfileOnly?: boolean;
 }
 
 const CATEGORIES = [
@@ -42,9 +51,12 @@ const TRANSACTIONS = [
   "尾号 5543 的用户 刚刚成交 MacBook Air ¥5500",
 ];
 
-export default function Home({ onSelectModel }: HomeProps) {
+export default function Home({ onSelectModel, showProfileOnly }: HomeProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [tickerIdx, setTickerIdx] = useState(0);
+  const [user, setUser] = useState(auth.currentUser);
+  const [myEvaluations, setMyEvaluations] = useState<any[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -53,15 +65,216 @@ export default function Home({ onSelectModel }: HomeProps) {
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setMyEvaluations([]);
+      return;
+    }
+
+    setIsLoadingHistory(true);
+    const q = query(
+      collection(db, 'evaluations'),
+      where('ownerUid', '==', user.uid),
+      orderBy('createdAt', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const evals = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setMyEvaluations(evals);
+      setIsLoadingHistory(false);
+    }, (error) => {
+      console.error("Error fetching evaluations:", error);
+      setIsLoadingHistory(false);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  useEffect(() => {
+    const handleMessage = async (event: MessageEvent) => {
+      if (event.data?.type === 'WECHAT_AUTH_SUCCESS') {
+        const { token } = event.data;
+        try {
+          await signInWithWeChatToken(token);
+        } catch (error) {
+          console.error("WeChat sign in failed", error);
+        }
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  const handleLogin = async () => {
+    try {
+      await signIn();
+    } catch (error) {
+      console.error("Login failed", error);
+    }
+  };
+
+  const handleWeChatLogin = async () => {
+    try {
+      const response = await fetch('/api/auth/wechat/url');
+      const { url } = await response.json();
+      window.open(url, 'wechat_login', 'width=600,height=700');
+    } catch (error) {
+      console.error("Failed to get WeChat auth URL", error);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+    } catch (error) {
+      console.error("Logout failed", error);
+    }
+  };
+
   const filteredModels = POPULAR_MODELS.filter(m => 
     m.label.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  if (showProfileOnly) {
+    return (
+      <div className="min-h-screen bg-[#F7F8FA] pb-24 font-sans">
+        <div className="bg-[#07C160] px-6 pt-8 pb-12 rounded-b-[40px] shadow-xl text-center">
+          <div className="max-w-2xl mx-auto">
+            {user ? (
+              <div className="flex flex-col items-center gap-4">
+                <div className="relative">
+                  <img src={user.photoURL || ''} alt="" className="w-24 h-24 rounded-full border-4 border-white/30 shadow-2xl" />
+                  <div className="absolute bottom-0 right-0 bg-white p-1.5 rounded-full shadow-lg">
+                    <ShieldCheck className="w-5 h-5 text-[#07C160]" />
+                  </div>
+                </div>
+                <div className="text-white">
+                  <h2 className="text-2xl font-black">{user.displayName}</h2>
+                  <p className="text-white/60 text-sm font-medium">{user.email}</p>
+                </div>
+                <button 
+                  onClick={handleLogout}
+                  className="mt-4 bg-white/10 hover:bg-white/20 text-white px-8 py-2 rounded-full text-sm font-bold backdrop-blur-sm border border-white/10 transition-all flex items-center gap-2"
+                >
+                  <LogOut className="w-4 h-4" /> 退出登录
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-6 py-8">
+                <div className="w-20 h-20 bg-white/20 rounded-3xl flex items-center justify-center backdrop-blur-lg border border-white/10">
+                  <User className="w-10 h-10 text-white" />
+                </div>
+                <div className="text-white">
+                  <h2 className="text-2xl font-black">欢迎使用专业回收</h2>
+                  <p className="text-white/60 text-sm mt-2">登录后查看您的评估历史和助力奖励</p>
+                </div>
+                <div className="flex flex-col gap-3 w-full max-w-[240px]">
+                  <button 
+                    onClick={handleLogin}
+                    className="bg-white text-[#07C160] px-12 py-4 rounded-2xl font-black shadow-xl active:scale-95 transition-transform flex items-center justify-center gap-2"
+                  >
+                    <User className="w-5 h-5" /> 谷歌登录
+                  </button>
+                  <button 
+                    onClick={handleWeChatLogin}
+                    className="bg-[#07C160] text-white px-12 py-4 rounded-2xl font-black shadow-xl active:scale-95 transition-transform flex items-center justify-center gap-2 border border-white/20"
+                  >
+                    <MessageCircle className="w-5 h-5" /> 微信登录
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="max-w-7xl mx-auto px-4 mt-8">
+          <div className="flex items-center justify-between mb-6 px-2">
+            <div className="flex items-center gap-2">
+              <div className="w-1 h-5 bg-[#07C160] rounded-full" />
+              <h2 className="text-xl font-black text-gray-900 italic">评估记录</h2>
+            </div>
+          </div>
+
+          {!user ? (
+            <div className="bg-white p-12 rounded-[32px] text-center shadow-sm border border-gray-50">
+              <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4 text-gray-300">
+                <Gift className="w-8 h-8" />
+              </div>
+              <p className="text-gray-400 font-bold mb-6">登录后即可查看您的评估历史</p>
+              <button 
+                onClick={handleLogin}
+                className="text-[#07C160] font-black text-sm border-2 border-[#07C160]/20 px-6 py-2 rounded-full hover:bg-green-50 transition-colors"
+              >
+                去登录
+              </button>
+            </div>
+          ) : isLoadingHistory ? (
+            <div className="text-center py-12">
+              <RefreshCw className="w-8 h-8 text-[#07C160] animate-spin mx-auto mb-3" />
+              <p className="text-gray-400 font-bold">正在加载记录...</p>
+            </div>
+          ) : myEvaluations.length === 0 ? (
+            <div className="bg-white p-12 rounded-[32px] text-center shadow-sm border border-gray-50">
+              <Smartphone className="w-12 h-12 text-gray-200 mx-auto mb-4" />
+              <p className="text-gray-400 font-bold">暂无评估记录</p>
+              <button 
+                onClick={() => onSelectModel('')}
+                className="mt-4 text-[#07C160] font-black text-sm"
+              >
+                去评估第一台手机
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {myEvaluations.map((evalItem) => (
+                <div key={evalItem.id} className="bg-white p-5 rounded-[28px] shadow-sm border border-gray-50 flex items-center justify-between group active:scale-[0.98] transition-all">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 bg-green-50 rounded-2xl flex items-center justify-center text-[#07C160]">
+                      <Smartphone className="w-7 h-7" />
+                    </div>
+                    <div>
+                      <div className="font-black text-gray-900 text-base">{evalItem.model}</div>
+                      <div className="text-xs text-gray-400 font-bold mt-0.5">
+                        {evalItem.createdAt?.toDate().toLocaleDateString()} 评估
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="flex items-baseline justify-end gap-0.5">
+                      <span className="text-xs text-[#07C160] font-black">¥</span>
+                      <span className="text-2xl text-[#07C160] font-black">{evalItem.boostedPrice || evalItem.basePrice}</span>
+                    </div>
+                    {evalItem.boostCount > 0 && (
+                      <div className="text-[10px] text-orange-500 font-black flex items-center justify-end gap-1 mt-1">
+                        <TrendingUp className="w-3 h-3" />
+                        已助力 +¥{evalItem.boostedPrice - evalItem.basePrice}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F7F8FA] pb-24 font-sans">
       {/* Sticky Search Header */}
       <div className="sticky top-0 z-50 bg-[#07C160] px-4 pt-6 md:pt-10 pb-5 md:pb-6 rounded-b-[32px] md:rounded-b-[40px] shadow-xl">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between mb-4 md:mb-6">
             <div className="flex items-center gap-2 md:gap-3">
               <div className="w-10 h-10 md:w-12 md:h-12 bg-white/20 rounded-xl md:rounded-2xl flex items-center justify-center backdrop-blur-lg border border-white/10">
@@ -75,9 +288,22 @@ export default function Home({ onSelectModel }: HomeProps) {
                 </div>
               </div>
             </div>
-            <div className="text-right">
-              <div className="text-white/60 text-[9px] md:text-xs font-bold uppercase tracking-wider">Users Served</div>
-              <div className="text-white font-black text-base md:text-2xl leading-none">120W+</div>
+            <div className="flex items-center gap-3">
+              {user ? (
+                <div className="flex items-center gap-2 bg-white/10 p-1.5 pr-3 rounded-full backdrop-blur-sm border border-white/10">
+                  <img src={user.photoURL || ''} alt="" className="w-7 h-7 md:w-8 md:h-8 rounded-full border border-white/20" />
+                  <button onClick={handleLogout} className="text-white/80 hover:text-white">
+                    <LogOut className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <button 
+                  onClick={handleLogin}
+                  className="bg-white text-[#07C160] px-4 py-1.5 rounded-full text-xs md:text-sm font-bold shadow-lg active:scale-95 transition-transform flex items-center gap-1.5"
+                >
+                  <User className="w-4 h-4" /> 登录
+                </button>
+              )}
             </div>
           </div>
           
@@ -115,7 +341,7 @@ export default function Home({ onSelectModel }: HomeProps) {
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         {/* Real-time Ticker */}
         <div className="px-6 py-3 bg-white/50 backdrop-blur-sm flex items-center gap-2 overflow-hidden">
           <div className="bg-green-50 text-[#07C160] text-[10px] md:text-xs font-bold px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0">
@@ -176,6 +402,48 @@ export default function Home({ onSelectModel }: HomeProps) {
           </div>
         </div>
 
+        {/* My Evaluations Section */}
+        {user && myEvaluations.length > 0 && (
+          <div className="px-4 mt-8">
+            <div className="flex items-center justify-between mb-4 px-2">
+              <div className="flex items-center gap-2">
+                <div className="w-1 h-5 bg-[#07C160] rounded-full" />
+                <h2 className="text-lg md:text-xl font-black text-gray-900 italic">我的评估</h2>
+                <Gift className="w-5 h-5 text-orange-500 fill-current" />
+              </div>
+            </div>
+            <div className="space-y-3">
+              {myEvaluations.map((evalItem) => (
+                <div key={evalItem.id} className="bg-white p-4 rounded-3xl shadow-sm border border-gray-50 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-green-50 rounded-2xl flex items-center justify-center text-[#07C160]">
+                      <Smartphone className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <div className="font-bold text-gray-800 text-sm md:text-base">{evalItem.model}</div>
+                      <div className="text-[10px] md:text-xs text-gray-400">
+                        {evalItem.createdAt?.toDate().toLocaleDateString()} 评估
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="flex items-baseline justify-end gap-0.5">
+                      <span className="text-[10px] text-[#07C160] font-bold">¥</span>
+                      <span className="text-lg md:text-xl text-[#07C160] font-black">{evalItem.boostedPrice || evalItem.basePrice}</span>
+                    </div>
+                    {evalItem.boostCount > 0 && (
+                      <div className="text-[9px] md:text-xs text-orange-500 font-bold flex items-center justify-end gap-0.5">
+                        <TrendingUp className="w-3 h-3" />
+                        已助力 {evalItem.boostCount} 次
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* High Price Section */}
         <div className="px-4 mt-8">
           <div className="flex items-center justify-between mb-4 px-2">
@@ -189,7 +457,7 @@ export default function Home({ onSelectModel }: HomeProps) {
             </button>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 md:gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5 md:gap-6">
             {(searchQuery ? filteredModels : POPULAR_MODELS).map((model, idx) => (
               <motion.button
                 key={model.id}

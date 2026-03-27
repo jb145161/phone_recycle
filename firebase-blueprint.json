@@ -1,0 +1,40 @@
+{
+  "entities": {
+    "Evaluation": {
+      "title": "Evaluation",
+      "description": "Represents a phone recycling evaluation.",
+      "type": "object",
+      "properties": {
+        "model": { "type": "string", "description": "The phone model name." },
+        "basePrice": { "type": "number", "description": "The initial calculated price." },
+        "boostedPrice": { "type": "number", "description": "The price after boosts." },
+        "boostCount": { "type": "number", "description": "Number of times this evaluation has been boosted." },
+        "ownerUid": { "type": "string", "description": "The UID of the user who created the evaluation." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the evaluation was created." }
+      },
+      "required": ["model", "basePrice", "boostedPrice", "ownerUid", "createdAt"]
+    },
+    "Boost": {
+      "title": "Boost",
+      "description": "Represents a price boost from a referral.",
+      "type": "object",
+      "properties": {
+        "evaluationId": { "type": "string", "description": "The ID of the evaluation being boosted." },
+        "boosterUid": { "type": "string", "description": "The UID of the user who performed the referral evaluation." },
+        "amount": { "type": "number", "description": "The random amount added to the evaluation." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the boost occurred." }
+      },
+      "required": ["evaluationId", "boosterUid", "amount", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/evaluations/{evaluationId}": {
+      "schema": "Evaluation",
+      "description": "Collection of phone evaluations."
+    },
+    "/evaluations/{evaluationId}/boosts/{boostId}": {
+      "schema": "Boost",
+      "description": "Sub-collection of boosts for a specific evaluation."
+    }
+  }
+}

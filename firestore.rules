@@ -1,0 +1,97 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: evaluations
+// Document ID: auto-generated
+// Fields:
+//   - model: string (required) - The phone model name.
+//   - basePrice: number (required) - The initial calculated price.
+//   - boostedPrice: number (required) - The price after boosts.
+//   - boostCount: number (required) - Number of times this evaluation has been boosted.
+//   - ownerUid: string (required) - The UID of the user who created the evaluation.
+//   - createdAt: timestamp (required) - When the evaluation was created.
+//
+// Sub-collection: evaluations/{evaluationId}/boosts
+// Document ID: auto-generated
+// Fields:
+//   - evaluationId: string (required) - The ID of the evaluation being boosted.
+//   - boosterUid: string (required) - The UID of the user who performed the referral evaluation.
+//   - amount: number (required) - The random amount added to the evaluation.
+//   - createdAt: timestamp (required) - When the boost occurred.
+//
+// ===============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.ownerUid;
+    }
+
+    function isValidEvaluation(data) {
+      return data.keys().hasAll(['model', 'basePrice', 'boostedPrice', 'boostCount', 'ownerUid', 'createdAt']) &&
+             data.model is string && data.model.size() > 0 && data.model.size() < 100 &&
+             data.basePrice is number && data.basePrice >= 0 &&
+             data.boostedPrice is number && data.boostedPrice >= data.basePrice &&
+             data.boostCount is number && data.boostCount >= 0 &&
+             data.ownerUid == request.auth.uid &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidBoost(data, evaluationId) {
+      return data.keys().hasAll(['evaluationId', 'boosterUid', 'amount', 'createdAt']) &&
+             data.evaluationId == evaluationId &&
+             data.boosterUid == request.auth.uid &&
+             data.amount is number && data.amount > 0 && data.amount < 100 &&
+             data.createdAt is timestamp;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /evaluations/{evaluationId} {
+      // Allow any authenticated user to read an evaluation (for boosting)
+      allow read: if isAuthenticated();
+      
+      // Allow authenticated users to create their own evaluations
+      allow create: if isAuthenticated() && isValidEvaluation(request.resource.data);
+      
+      // Allow the owner to update their evaluation (e.g., when boosted)
+      // Also allow a booster to update the boostedPrice and boostCount via a batch/transaction
+      allow update: if isAuthenticated() && (
+        (isDocOwner() && request.resource.data.ownerUid == resource.data.ownerUid) ||
+        (
+          // Booster update: only boostedPrice and boostCount can change
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['boostedPrice', 'boostCount']) &&
+          request.resource.data.boostedPrice > resource.data.boostedPrice &&
+          request.resource.data.boostCount == resource.data.boostCount + 1
+        )
+      );
+    }
+
+    match /evaluations/{evaluationId}/boosts/{boostId} {
+      // Only the evaluation owner can read the boosts
+      allow read: if isAuthenticated() && get(/databases/$(database)/documents/evaluations/$(evaluationId)).data.ownerUid == request.auth.uid;
+      
+      // Any authenticated user (except the owner) can create a boost
+      allow create: if isAuthenticated() && 
+                    request.auth.uid != get(/databases/$(database)/documents/evaluations/$(evaluationId)).data.ownerUid &&
+                    isValidBoost(request.resource.data, evaluationId);
+    }
+  }
+}

@@ -42,12 +42,17 @@ export const calculatePrice = (params: {
   if (params.storage.includes("256")) price += 500;
   if (params.storage.includes("512")) price += 1000;
 
-  if (params.screen.includes("碎") || params.screen.includes("坏")) price -= 1000;
-  else if (params.screen.includes("划痕")) price -= 300;
+  const hasCondition = (s: string, keywords: string[]) => {
+    const isNegative = s.includes("无") || s.includes("没") || s.includes("不");
+    return keywords.some(k => s.includes(k)) && !isNegative;
+  };
 
-  if (params.repair.includes("有") || params.repair.includes("换过")) price -= 800;
+  if (hasCondition(params.screen, ["碎", "坏", "裂"])) price -= 1000;
+  else if (hasCondition(params.screen, ["划痕"])) price -= 300;
 
-  if (params.lock.includes("有") || params.lock.includes("锁")) return null;
+  if (hasCondition(params.repair, ["有", "换过", "修"])) price -= 800;
+
+  if (hasCondition(params.lock, ["有", "锁"])) return null;
 
   return price;
 };

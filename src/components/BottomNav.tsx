@@ -1,24 +1,33 @@
 import React from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Smartphone, TrendingUp, Zap, Truck, ShieldCheck } from 'lucide-react';
 
-interface BottomNavProps {
-  activeTab: 'home' | 'market' | 'orders' | 'profile';
-  onTabChange: (tab: 'home' | 'market' | 'orders' | 'profile') => void;
-}
+export default function BottomNav() {
+  const navigate = useNavigate();
+  const location = useLocation();
 
-export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
+  const getActiveTab = () => {
+    if (location.pathname === '/') return 'home';
+    if (location.pathname === '/market') return 'market';
+    if (location.pathname === '/orders') return 'orders';
+    if (location.pathname === '/profile') return 'profile';
+    return 'home';
+  };
+
+  const activeTab = getActiveTab();
+
   return (
     <div className="fixed bottom-0 left-0 right-0 h-16 md:h-20 bg-white/80 backdrop-blur-xl border-t border-gray-100 px-4 md:px-8 flex justify-between items-center z-50">
-      <div className="max-w-5xl mx-auto w-full flex justify-between items-center">
+      <div className="max-w-7xl mx-auto w-full flex justify-between items-center">
         <button 
-          onClick={() => onTabChange('home')}
+          onClick={() => navigate('/')}
           className={`flex flex-col items-center gap-0.5 md:gap-1 ${activeTab === 'home' ? 'text-[#07C160]' : 'text-gray-300'} cursor-pointer`}
         >
           <Smartphone className="w-5 h-5 md:w-6 md:h-6" />
           <span className="text-[9px] md:text-[10px] font-bold">首页</span>
         </button>
         <button 
-          onClick={() => onTabChange('market')}
+          onClick={() => navigate('/market')}
           className={`flex flex-col items-center gap-0.5 md:gap-1 ${activeTab === 'market' ? 'text-[#07C160]' : 'text-gray-300'} cursor-pointer`}
         >
           <TrendingUp className="w-5 h-5 md:w-6 md:h-6" />
@@ -28,14 +37,14 @@ export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
           <Zap className="w-6 h-6 md:w-7 md:h-7 fill-current" />
         </div>
         <button 
-          onClick={() => onTabChange('orders')}
+          onClick={() => navigate('/orders')}
           className={`flex flex-col items-center gap-0.5 md:gap-1 ${activeTab === 'orders' ? 'text-[#07C160]' : 'text-gray-300'} cursor-pointer`}
         >
           <Truck className="w-5 h-5 md:w-6 md:h-6" />
           <span className="text-[9px] md:text-[10px] font-bold">订单</span>
         </button>
         <button 
-          onClick={() => onTabChange('profile')}
+          onClick={() => navigate('/profile')}
           className={`flex flex-col items-center gap-0.5 md:gap-1 ${activeTab === 'profile' ? 'text-[#07C160]' : 'text-gray-300'} cursor-pointer`}
         >
           <ShieldCheck className="w-5 h-5 md:w-6 md:h-6" />

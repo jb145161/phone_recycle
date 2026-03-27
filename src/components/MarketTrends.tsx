@@ -47,16 +47,8 @@ export default function MarketTrends() {
   return (
     <div className="min-h-screen bg-[#F7F8FA] pb-24 font-sans">
       {/* Header */}
-      <div className="bg-white px-4 pt-10 pb-6 rounded-b-[32px] shadow-sm sticky top-0 z-20">
-        <div className="max-w-5xl mx-auto">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-xl md:text-2xl font-black text-gray-900">市场行情</h1>
-            <div className="flex items-center gap-2 text-[#07C160] bg-green-50 px-3 py-1.5 rounded-full">
-              <TrendingUp className="w-4 h-4" />
-              <span className="text-xs font-bold">实时更新</span>
-            </div>
-          </div>
-
+      <div className="bg-white px-4 pt-6 pb-6 rounded-b-[32px] shadow-sm">
+        <div className="max-w-7xl mx-auto">
           <div className="relative">
             <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
               <Search className="w-4 h-4 text-gray-400" />
@@ -72,7 +64,7 @@ export default function MarketTrends() {
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-4 mt-6 space-y-6">
+      <div className="max-w-7xl mx-auto px-4 mt-6 space-y-6">
         {/* Main Chart Card */}
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
