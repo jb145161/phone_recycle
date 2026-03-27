@@ -22,9 +22,7 @@ body {
 
 #root {
   width: 100%;
-  max-width: 500px;
-  background: white;
-  box-shadow: 0 0 20px rgba(0,0,0,0.05);
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
